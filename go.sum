@@ -1,7 +1,7 @@
-github.com/akley-MK4/go-tools-box v1.0.0-pre h1:8gSKrxB7cvofmOiXIiBiESAeWdmOsAlKZgc06ua4yNY=
-github.com/akley-MK4/go-tools-box v1.0.0-pre/go.mod h1:/lRtbGP9I3qYju8GiqdyJqTWd1gGtGt5pFerTbuWYx8=
-github.com/akley-MK4/pep-coroutine v1.0.2-pre h1:1lQvcStY1CMuIUXd0ClFTUxo2ve6Z6m4xy9Xrryz+7s=
-github.com/akley-MK4/pep-coroutine v1.0.2-pre/go.mod h1:6Y1ylb2cxhRjbKBRbjFihfOvhZ96d8cbEIAy47TnDzE=
+github.com/akley-MK4/go-tools-box v1.0.0 h1:thnJG3x6svGk28BZE4FNUfyHfncEvK956Oz65wa1dDo=
+github.com/akley-MK4/go-tools-box v1.0.0/go.mod h1:/lRtbGP9I3qYju8GiqdyJqTWd1gGtGt5pFerTbuWYx8=
+github.com/akley-MK4/pep-coroutine v1.0.0 h1:K/EfKJ3+MAmAia3iz+ppP082Yo+TFj2I9jmzLSnJAAo=
+github.com/akley-MK4/pep-coroutine v1.0.0/go.mod h1:6Y1ylb2cxhRjbKBRbjFihfOvhZ96d8cbEIAy47TnDzE=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
 golang.org/x/sys v0.4.0 h1:Zr2JFtRQNX3BCZ8YtxRE9hNJYC8J6I1MVbMg6owUp18=

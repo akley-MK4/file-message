@@ -1,4 +1,4 @@
-package server
+package implement
 
 import (
 	"errors"
@@ -12,11 +12,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
 	"sync"
 )
 
-func NewServer(basePath string, onReceivedMessage common.OnReceivedMessage) (retSvr *Server, retErr error) {
+func NewResponder(basePath string, onReceivedMessage common.OnReceivedMessage) (retResponder *Responder, retErr error) {
 	if onReceivedMessage == nil {
 		retErr = errors.New("the onReceivedMessage function is a nil value")
 		return
@@ -52,7 +51,7 @@ func NewServer(basePath string, onReceivedMessage common.OnReceivedMessage) (ret
 		return
 	}
 
-	svr := &Server{
+	retResponder = &Responder{
 		dirWatcher:         w,
 		reqMsgInfoMap:      make(map[string]common.MessageInfo),
 		onReceivedMessage:  onReceivedMessage,
@@ -60,11 +59,10 @@ func NewServer(basePath string, onReceivedMessage common.OnReceivedMessage) (ret
 		requestMsgDirPath:  requestMsgDirPath,
 	}
 
-	retSvr = svr
 	return
 }
 
-type Server struct {
+type Responder struct {
 	requestMsgDirPath  string
 	responseMsgDirPath string
 	dirWatcher         *fsnotify.Watcher
@@ -73,8 +71,8 @@ type Server struct {
 	onReceivedMessage  common.OnReceivedMessage
 }
 
-func (t *Server) Start() error {
-	return PCI.CreateAndStartStatelessCoroutine(common.CoroutineGroupServer1, func(_ PCD.CoId, _ ...interface{}) bool {
+func (t *Responder) Start() error {
+	return PCI.CreateAndStartStatelessCoroutine(common.CoroutineGroupResponder1, func(_ PCD.CoId, _ ...interface{}) bool {
 		if err := t.listenRequestMessageFile(); err != nil {
 			logger.GetLoggerInstance().WarningF("The listening request message file failed and will exit the listening process, %v", err)
 		}
@@ -83,7 +81,7 @@ func (t *Server) Start() error {
 	})
 }
 
-func (t *Server) listenRequestMessageFile() error {
+func (t *Responder) listenRequestMessageFile() error {
 	for {
 		triggered, watchErr := t.watchDir()
 		if watchErr != nil {
@@ -99,7 +97,7 @@ func (t *Server) listenRequestMessageFile() error {
 	}
 }
 
-func (t *Server) watchDir() (bool, error) {
+func (t *Responder) watchDir() (bool, error) {
 	select {
 	case err, ok := <-t.dirWatcher.Errors:
 		if !ok {
@@ -119,30 +117,38 @@ func (t *Server) watchDir() (bool, error) {
 	return true, nil
 }
 
-func (t *Server) checkAndProcessRequestMessageFile() (retErr error) {
+func (t *Responder) checkAndProcessRequestMessageFile() (retErr error) {
 	var addedMsgInfos []common.MessageInfo
-	walkErr := filepath.Walk(t.requestMsgDirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	dirEntryList, readDirErr := os.ReadDir(t.requestMsgDirPath)
+	if readDirErr != nil {
+		return readDirErr
+	}
+
+	for _, dirEntry := range dirEntryList {
+		if dirEntry.IsDir() {
+			continue
 		}
-		if info.IsDir() {
-			return nil
+
+		info, infoErr := dirEntry.Info()
+		if infoErr != nil {
+			logger.GetLoggerInstance().WarningF("Failed to get file info, DirEntry: %v, Err: %v", dirEntry.Name(), infoErr)
+			continue
 		}
 
 		fileName := info.Name()
 		opType, seqNum, nanosecond, parseMsgFileNameErr := common.ParseMessageFileName(fileName)
 		if parseMsgFileNameErr != nil {
 			logger.GetLoggerInstance().WarningF("Failed to parse request message file name, %v", parseMsgFileNameErr)
-			return nil
+			continue
 		}
-		if opType != common.RequestMsgType {
+		if opType != common.RequestMsgOpType {
 			logger.GetLoggerInstance().WarningF("Wrong request message file name OpType, FileName: %v", fileName)
-			return nil
+			continue
 		}
 
 		msgInfo := common.MessageInfo{
 			FileName:   fileName,
-			FilePath:   path,
+			FilePath:   path.Join(t.requestMsgDirPath, fileName),
 			OpType:     opType,
 			SeqNum:     seqNum,
 			Nanosecond: nanosecond,
@@ -150,19 +156,13 @@ func (t *Server) checkAndProcessRequestMessageFile() (retErr error) {
 
 		if !t.addReqMessageInfo(msgInfo) {
 			logger.GetLoggerInstance().WarningF("Failed to add request message file with filename %v, It already exists", fileName)
-			return nil
+			continue
 		}
 		addedMsgInfos = append(addedMsgInfos, msgInfo)
-		return nil
-	})
-
-	if walkErr != nil {
-		retErr = walkErr
-		return
 	}
 
 	for _, msgInfo := range addedMsgInfos {
-		if err := PCI.CreateAndStartStatelessCoroutine(common.CoroutineGroupServer2, func(coID PCD.CoId, args ...interface{}) bool {
+		if err := PCI.CreateAndStartStatelessCoroutine(common.CoroutineGroupResponder2, func(coID PCD.CoId, args ...interface{}) bool {
 			inMsgInfo := args[0].(common.MessageInfo)
 			if err := t.processRequestMessage(inMsgInfo); err != nil {
 				logger.GetLoggerInstance().WarningF("Failed to process request message, %v", err)
@@ -177,7 +177,7 @@ func (t *Server) checkAndProcessRequestMessageFile() (retErr error) {
 	return
 }
 
-func (t *Server) addReqMessageInfo(msgInfo common.MessageInfo) bool {
+func (t *Responder) addReqMessageInfo(msgInfo common.MessageInfo) bool {
 	t.rwMutex.Lock()
 	defer t.rwMutex.Unlock()
 
@@ -189,7 +189,7 @@ func (t *Server) addReqMessageInfo(msgInfo common.MessageInfo) bool {
 	return true
 }
 
-func (t *Server) cleanUpRequestMessageInfo(fileName string) (retErr error) {
+func (t *Responder) cleanUpRequestMessageInfo(fileName string) (retErr error) {
 	t.rwMutex.Lock()
 	defer t.rwMutex.Unlock()
 	msgInfo, exist := t.reqMsgInfoMap[fileName]
@@ -206,9 +206,9 @@ func (t *Server) cleanUpRequestMessageInfo(fileName string) (retErr error) {
 	return
 }
 
-func (t *Server) processRequestMessage(msgInfo common.MessageInfo) error {
-	logger.GetLoggerInstance().DebugF("Start processing request message, FileName: %v, SeqNum: %v, Nanosecond: %v",
-		msgInfo.FileName, msgInfo.SeqNum, msgInfo.Nanosecond)
+func (t *Responder) processRequestMessage(msgInfo common.MessageInfo) error {
+	logger.GetLoggerInstance().DebugF("Start processing request message, FileName: %v, FilePath: %v, SeqNum: %v, Nanosecond: %v",
+		msgInfo.FileName, msgInfo.FilePath, msgInfo.SeqNum, msgInfo.Nanosecond)
 	msgData, readErr := ioutil.ReadFile(msgInfo.FilePath)
 	if readErr != nil {
 		return readErr
@@ -217,17 +217,10 @@ func (t *Server) processRequestMessage(msgInfo common.MessageInfo) error {
 		return errors.New("empty file")
 	}
 
-	return PCI.CreateAndStartStatelessCoroutine(common.CoroutineGroupServer3, func(coID PCD.CoId, args ...interface{}) bool {
-		inMsgInfo := args[0].(common.MessageInfo)
-		inMsgData := args[1].([]byte)
-		if err := t.dispatchMessage(inMsgInfo, inMsgData); err != nil {
-			logger.GetLoggerInstance().WarningF("Failed dispatch message, FileName: %v, Err: %v", inMsgInfo.FileName, err)
-		}
-		return false
-	}, msgInfo, msgData)
+	return t.dispatchMessage(msgInfo, msgData)
 }
 
-func (t *Server) dispatchMessage(msgInfo common.MessageInfo, msgData []byte) error {
+func (t *Responder) dispatchMessage(msgInfo common.MessageInfo, msgData []byte) error {
 	respData := t.onReceivedMessage(msgData, msgInfo.SeqNum, msgInfo.Nanosecond)
 
 	defer func() {

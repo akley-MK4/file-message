@@ -5,7 +5,7 @@ type MessageInfo struct {
 	FilePath   string
 	OpType     string
 	SeqNum     uint64
-	Nanosecond int
+	Nanosecond int64
 }
 
-type OnReceivedMessage func(msgData []byte, seqNum uint64, nanosecond int) []byte
+type OnReceivedMessage func(msgData []byte, seqNum uint64, nanosecond int64) []byte
